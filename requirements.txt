@@ -1,0 +1,14 @@
+pandas
+numpy
+scikit-learn
+xgboost
+lightgbm
+optuna
+mlflow
+feast
+kafka-python
+stable-baselines3
+torch
+gymnasium
+prometheus-client
+pyyaml
