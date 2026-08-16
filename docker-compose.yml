@@ -1,0 +1,95 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 256M
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    restart: "no"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 384M
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    restart: "no"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_HEAP_OPTS: "-Xms256M -Xmx512M"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 768M
+
+  mlflow:
+    image: mlflow/mlflow:latest
+    restart: "no"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root ./mlartifacts
+      --host 0.0.0.0
+    ports:
+      - "5000:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 512M
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: "no"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 384M
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: "no"
+    ports:
+      - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 384M
+
+  core_engine:
+    build: .
+    restart: "no"
+    command: bash -c "sleep 12 && python main_batch.py"
+    ports:
+      - "8060:8060"
+    depends_on:
+      - redis
+      - kafka
+      - mlflow
+    deploy:
+      resources:
+        limits:
+          cpus: '1.6'
+          memory: 14G
