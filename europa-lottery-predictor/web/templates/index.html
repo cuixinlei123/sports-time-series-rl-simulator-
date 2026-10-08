@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>欧罗巴竞彩足球 · 职业预测解析系统</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --win: #22c55e; --draw: #eab308; --lose: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 24px; text-align:center; }
+  header h1 { margin: 0; font-size: 26px; }
+  header p { margin: 6px 0 0; color: #dbeafe; font-size: 14px; }
+  .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+  .grid { display: grid; gap: 16px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 900px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .card h3 { margin: 0 0 14px; font-size: 16px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .match-card { cursor: pointer; transition: transform .15s, border-color .15s; }
+  .match-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .match-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(56,189,248,.3); }
+  .vs { font-size: 22px; font-weight: bold; text-align: center; margin: 8px 0; }
+  .meta { font-size: 12px; color: var(--muted); text-align: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .tag-high { background: #166534; color: #86efac; }
+  .tag-mid { background: #854d0e; color: #fde68a; }
+  .tag-low { background: #7f1d1d; color: #fca5a5; }
+  .chart-box { position: relative; height: 280px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 13px; margin: 0 2px; }
+  .badge-win { background: var(--win); color: #052e16; }
+  .badge-draw { background: var(--draw); color: #422006; }
+  .badge-lose { background: var(--lose); color: #450a0a; }
+  button { background: var(--accent); color: #0c4a6e; border: none; padding: 10px 20px;
+           border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .empty { color: var(--muted); text-align: center; padding: 30px; }
+  details { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+  .rules p { margin: 6px 0; line-height: 1.7; font-size: 13px; color: var(--muted); }
+  .rules b { color: var(--text); }
+  .value-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ev-pos { color: var(--win); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚽ 欧罗巴赛事 · 中国体彩竞彩足球职业预测解析系统</h1>
+  <p>Elo 实力评分 + Poisson 进球模型 + 赔率价值分析 · 现场运行预测引擎</p>
+</header>
+
+<div class="container">
+
+  <details class="rules" open>
+    <summary>📖 竞彩足球规则解析（欧罗巴赛事适用）</summary>
+    <p><b>1. 胜平负（1X2）：</b>竞猜全场主队胜 / 平 / 负，赔率即奖金返还倍数。</p>
+    <p><b>2. 让球胜平负：</b>在比分基础上加上让球数（主让为负）再判胜负，平衡强弱对阵。</p>
+    <p><b>3. 比分：</b>竞猜全场准确比分，如 1:0、2:1，赔率较高、命中难度大。</p>
+    <p><b>4. 总进球：</b>竞猜全场总进球数，分 0、1、2、3、4、5、6、7+ 八档。</p>
+    <p><b>5. 半全场：</b>同时竞猜半场与全场胜平负，共 9 种组合（胜胜/胜平/胜负/平胜/平平/平负/负胜/负平/负负）。</p>
+    <p><b>核心逻辑：</b>本系统用 Elo 评分估算双方实力差，用 Poisson 模型对期望进球建模得到比分矩阵，进而推导五大玩法的真实概率；再将体彩赔率反推市场隐含概率（去抽水），当 <b>模型概率 > 市场隐含概率</b> 时即构成 <b>价值投注（EV&gt;0）</b>。</p>
+  </details>
+
+  <h3 style="color:var(--accent)">🎯 选择一场欧罗巴示例比赛（点击卡片运行预测）</h3>
+  <div id="match-list" class="grid grid-3"></div>
+
+  <div id="result-area" style="margin-top: 20px;">
+    <div class="card empty">请选择上方一场比赛，或提交自定义比赛数据以运行预测分析。</div>
+  </div>
+
+</div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+let chartInstances = {};
+
+function destroyCharts() {
+  Object.values(chartInstances).forEach(c => c.destroy());
+  chartInstances = {};
+}
+
+function renderMatchList(matches) {
+  const box = $("#match-list");
+  box.innerHTML = matches.map((m, i) => `
+    <div class="card match-card" data-idx="${i}">
+      <div class="vs">${m.home_team} <span style="color:var(--muted)">VS</span> ${m.away_team}</div>
+      <div class="meta">${m.competition} · ${m.round_name}<br>${m.match_time} · 让球 ${m.handicap > 0 ? '+' : ''}${m.handicap}</div>
+    </div>
+  `).join("");
+  box.querySelectorAll(".match-card").forEach(card => {
+    card.onclick = () => runPredict(matches[+card.dataset.idx], card);
+  });
+}
+
+function fmtPct(p) { return (p * 100).toFixed(1) + "%"; }
+
+function renderReport(d) {
+  const spf = d.spf;
+  const top = [["主胜", spf["胜"]], ["平局", spf["平"]], ["客胜", spf["负"]]].sort((a,b)=>b[1]-a[1]);
+  let html = `
+    <div class="card" style="margin-bottom:16px">
+      <h3>📊 预测摘要</h3>
+      <p style="font-size:15px">${d.summary}</p>
+      <div>
+        <span class="badge badge-win">主胜 ${fmtPct(spf["胜"])}</span>
+        <span class="badge badge-draw">平局 ${fmtPct(spf["平"])}</span>
+        <span class="badge badge-lose">客胜 ${fmtPct(spf["负"])}</span>
+        <span style="margin-left:12px;color:var(--muted)">最可能比分：<b style="color:var(--accent)">${d.most_likely_score}</b>（${fmtPct(d.most_likely_score_prob)}）</span>
+        <span style="margin-left:12px;color:var(--muted)">期望进球 主 ${d.lambda_home} / 客 ${d.lambda_away}</span>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:16px">
+      <div class="card"><h3>胜平负概率分布</h3><div class="chart-box"><canvas id="chart-spf"></canvas></div></div>
+      <div class="card"><h3>模型概率 vs 市场隐含概率</h3><div class="chart-box"><canvas id="chart-odds"></canvas></div></div>
+      <div class="card"><h3>总进球数概率</h3><div class="chart-box"><canvas id="chart-zjq"></canvas></div></div>
+      <div class="card"><h3>半全场概率</h3><div class="chart-box"><canvas id="chart-bqc"></canvas></div></div>
+    </div>
+  `;
+
+  // 价值投注表
+  html += `<div class="card" style="margin-bottom:16px"><h3>💰 价值投注推荐（EV = 模型概率 × 赔率 − 1）</h3>`;
+  if (!d.value_bets.length) {
+    html += `<p class="empty">未发现显著价值投注（EV < 0），建议观望。</p>`;
+  } else {
+    html += `<table><thead><tr><th>玩法</th><th>选项</th><th>模型概率</th><th>赔率</th><th>EV</th><th>信心</th><th>建议</th></tr></thead><tbody>`;
+    d.value_bets.forEach(vb => {
+      const tag = vb.confidence === "高" ? "tag-high" : vb.confidence === "中" ? "tag-mid" : "tag-low";
+      html += `<tr><td>${vb.bet_type}</td><td>${vb.selection}</td><td>${fmtPct(vb.model_prob)}</td>
+               <td>${vb.odds.toFixed(2)}</td><td class="ev-pos">${(vb.ev*100).toFixed(1)}%</td>
+               <td><span class="tag ${tag}">${vb.confidence}</span></td><td>${vb.recommendation}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+
+  // 各玩法详细概率表
+  const zjqKeys = ["0","1","2","3","4","5","6","7+"];
+  html += `<div class="grid grid-2">
+    <div class="card"><h3>总进球详细</h3><table><thead><tr><th>进球</th><th>模型概率</th><th>体彩赔率</th><th>公平赔率</th></tr></thead><tbody>`;
+  zjqKeys.forEach(k => {
+    html += `<tr><td>${k}</td><td>${fmtPct(d.total_goals[k])}</td><td>${d.fair_odds["总进球"][k] ? (1/d.fair_odds["总进球"][k]).toFixed(2) : '-'}</td><td>${d.fair_odds["总进球"][k].toFixed(2)}</td></tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  const bqcOrder = ["胜胜","胜平","胜负","平胜","平平","平负","负胜","负平","负负"];
+  html += `<div class="card"><h3>半全场详细</h3><table><thead><tr><th>半全场</th><th>模型概率</th><th>公平赔率</th></tr></thead><tbody>`;
+  bqcOrder.forEach(k => {
+    html += `<tr><td>${k}</td><td>${fmtPct(d.bqc[k])}</td><td>${d.fair_odds["半全场"][k].toFixed(2)}</td></tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+
+  $("#result-area").innerHTML = html;
+
+  // 绘制图表
+  const charts = d.charts;
+  chartInstances.spf = new Chart($("#chart-spf"), charts.spf);
+  chartInstances.odds = new Chart($("#chart-odds"), {...charts.odds_compare, options: {responsive:true, maintainAspectRatio:false}});
+  chartInstances.zjq = new Chart($("#chart-zjq"), {...charts.zjq, options: {responsive:true, maintainAspectRatio:false}});
+  chartInstances.bqc = new Chart($("#chart-bqc"), {...charts.bqc, options: {responsive:true, maintainAspectRatio:false}});
+}
+
+function runPredict(match, cardEl) {
+  document.querySelectorAll(".match-card").forEach(c => c.classList.remove("active"));
+  if (cardEl) cardEl.classList.add("active");
+  destroyCharts();
+  $("#result-area").innerHTML = `<div class="card empty">⏳ 正在运行预测引擎...</div>`;
+  fetch("/api/predict", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(match),
+  }).then(r => r.json()).then(d => {
+    if (d.error) { $("#result-area").innerHTML = `<div class="card" style="color:var(--lose)">错误：${d.error}</div>`; return; }
+    renderReport(d);
+  }).catch(e => {
+    $("#result-area").innerHTML = `<div class="card" style="color:var(--lose)">请求失败：${e}</div>`;
+  });
+}
+
+// 初始化：加载比赛列表并自动运行第一场作为示例
+fetch("/api/matches").then(r => r.json()).then(matches => {
+  renderMatchList(matches);
+  if (matches.length) runPredict(matches[0], document.querySelector(".match-card"));
+});
+</script>
+</body>
+</html>
