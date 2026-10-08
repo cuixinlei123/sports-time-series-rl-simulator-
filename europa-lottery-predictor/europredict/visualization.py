@@ -72,10 +72,33 @@ def odds_compare_chart(report: AnalysisReport) -> dict:
     }
 
 
+def score_matrix_heatmap(report: AnalysisReport) -> dict:
+    """比分矩阵热力图数据：返回 9x9 矩阵用于前端绘制"""
+    matrix = report.probs.score_matrix
+    n = len(matrix)
+    # 转为百分比，保留1位小数
+    data = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            row.append(round(matrix[i][j] * 100, 2))
+        data.append(row)
+    return {
+        "type": "matrix",
+        "data": {
+            "labels": [str(i) for i in range(n)],
+            "matrix": data,
+            "lambda_home": report.probs.lambda_home,
+            "lambda_away": report.probs.lambda_away,
+        },
+    }
+
+
 def build_all_charts(report: AnalysisReport) -> Dict[str, dict]:
     return {
         "spf": spf_chart(report),
         "zjq": zjq_chart(report),
         "bqc": bqc_chart(report),
         "odds_compare": odds_compare_chart(report),
+        "score_matrix": score_matrix_heatmap(report),
     }
